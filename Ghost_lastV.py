@@ -25,7 +25,6 @@ def resolve_host(hostname):
 
 
 def build_sync_connections():
-    """Connette ai socket degli alleati. Blocca finché non sono pronti."""
     conns = {}
     for port in SYNC_PORTS:
         while True:
@@ -43,7 +42,6 @@ def build_sync_connections():
 
 
 def fire_signal(conns):
-    """Manda segnale FIRE a tutti gli alleati contemporaneamente."""
     for port, s in conns.items():
         try:
             s.sendall(b"FIRE\n")
@@ -58,15 +56,15 @@ class BattleAPI:
     def __init__(self):
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=MAX_THREADS + 5,
-            pool_maxsize=MAX_THREADS + 5,
+            pool_connections=MAX_THREADS + 10,
+            pool_maxsize=MAX_THREADS + 10,
             max_retries=0
         )
         self.session.mount("https://", adapter)
         self.session.headers.update({
-            "Connection": "keep-alive",
-            "Keep-Alive": "timeout=30, max=1000",
-            "Accept": "application/json",
+            "Connection":      "keep-alive",
+            "Keep-Alive":      "timeout=30, max=1000",
+            "Accept":          "application/json",
             "Accept-Encoding": "identity",
         })
 
@@ -101,8 +99,6 @@ class BotState:
         self.kill_target_lock  = None
         self.kill_lock_score   = 0
         self.ghost_cycles_left = 0
-        self.prefetch_result   = None
-        self.prefetch_lock     = threading.Lock()
 
     def reset(self, new_code):
         self.code              = new_code
@@ -110,7 +106,6 @@ class BotState:
         self.round_start       = time.time()
         self.kill_target_lock  = None
         self.ghost_cycles_left = 0
-        self.prefetch_result   = None
 
     def seconds_until(self, iso_timestamp):
         try:
@@ -169,15 +164,10 @@ class BotState:
             print(f"[VENDETTA] 😤 -{abs(delta)} → {sospettati}")
 
     def pick_targets(self, players):
-        """
-        Nemici reali: kill lock → vendetta → score.
-        Alleati visibili: colpiti in fondo (punti garantiti).
-        """
         nemici = [p for p in players
             if p["name"] != self.name
             and p["name"] not in ALLY_NAMES
             and p.get("visible")]
-
         alleati_visibili = [p for p in players
             if p["name"] in ALLY_NAMES and p.get("visible")]
 
@@ -199,41 +189,13 @@ class BotState:
         if vendetta:
             print(f"[VENDETTA] 🎯 {[t['name'] for t in vendetta]}")
         if alleati_visibili:
-            print(f"[ALLY HIT] 🤝 {[t['name'] for t in alleati_visibili]} — punti garantiti")
+            print(f"[ALLY HIT] 🤝 {[t['name'] for t in alleati_visibili]}")
 
         return ordered + vendetta + altri + alleati_visibili
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PREFETCH
-# ═══════════════════════════════════════════════════════════════════
-def prefetch_players(api, state):
-    try:
-        res = api.players(state.code)
-        with state.prefetch_lock:
-            state.prefetch_result = res
-    except:
-        pass
-
-
-def get_players(api, state):
-    with state.prefetch_lock:
-        cached = state.prefetch_result
-        state.prefetch_result = None
-    if cached and cached.get("ok"):
-        print("[PREFETCH] ⚡ Da cache")
-        return cached.get("players", [])
-    try:
-        res = api.players(state.code)
-        if res.get("ok"):
-            return res.get("players", [])
-    except Exception as e:
-        print(f"[!] Errore players: {e}")
-    return []
-
-
-# ═══════════════════════════════════════════════════════════════════
-# RAFFICA
+# RAFFICA — 50 thread
 # ═══════════════════════════════════════════════════════════════════
 def fire_worker(api, code, target_name, results, index):
     try:
@@ -285,6 +247,17 @@ def login(api, state):
 
 # ═══════════════════════════════════════════════════════════════════
 # LOOP PRINCIPALE
+#
+# OTTIMIZZAZIONE: /players parte IN PARALLELO al ping
+# ──────────────────────────────────────────────────────────────────
+# PRIMA (sequenziale):
+#   ping [~100ms] → /players [~100ms] → fire
+#   tempo perso: ~200ms
+#
+# ORA (parallelo):
+#   ping     [~100ms] ──┐
+#   /players [~100ms] ──┘ partono insieme
+#   → risparmio ~100ms per ciclo
 # ═══════════════════════════════════════════════════════════════════
 def bot_loop(api, state, sync_conns):
     if not login(api, state):
@@ -296,12 +269,31 @@ def bot_loop(api, state, sync_conns):
         go_ghost    = state.should_go_ghost()
         visible_now = not go_ghost
 
+        # Contenitore condiviso per il risultato di /players parallelo
+        players_result = [None]
+        players_ready  = threading.Event()
+
+        def fetch_players_parallel():
+            try:
+                res = api.players(state.code)
+                players_result[0] = res
+            except Exception as e:
+                print(f"[!] /players parallelo: {e}")
+            finally:
+                players_ready.set()
+
+        # ── LANCIA /players e ping CONTEMPORANEAMENTE ─────────────
+        if visible_now:
+            threading.Thread(target=fetch_players_parallel, daemon=True).start()
+
+        # Ping bloccante — obbligatorio prima di sparare
         try:
             ping_res = api.ping(state.code, visible=visible_now)
             print(f"[Shooter_v1] PING #{state.iteration} | score={state.my_score} | t={int(state.round_elapsed())}s")
         except Exception as e:
             print(f"[!] Ping error: {e}")
             ping_res = None
+            players_ready.set()
 
         if ping_res is None or not ping_res.get("ok"):
             motivo = ping_res.get("error", "?") if ping_res else "no risposta"
@@ -313,18 +305,36 @@ def bot_loop(api, state, sync_conns):
         next_ping_at = ping_res.get("nextPingAt")
 
         if visible_now:
-            time.sleep(0.05)
+            # Attendi /players (solitamente già pronto, ping e players ~stesso tempo)
+            players_ready.wait(timeout=0.3)
+            pd = players_result[0]
+            players = pd.get("players", []) if (pd and pd.get("ok")) else []
 
-            # ── SEGNALE SYNC ─────────────────────────────────────
-            # Manda FIRE agli alleati → si rendono visibili nel loro ping
-            print("[SYNC] 📡 FIRE signal → Ghost_1, Ghost_2")
-            fire_signal(sync_conns)
-            time.sleep(0.3)  # aspetta che gli alleati facciano ping visibile
+            # Fallback se parallelo ha fallito
+            if not players:
+                try:
+                    r = api.players(state.code)
+                    players = r.get("players", []) if r.get("ok") else []
+                except:
+                    players = []
 
-            players = get_players(api, state)
             if players:
                 state.update_score_and_vendetta(players)
                 state.update_kill_lock(players)
+
+                # Segnale FIRE agli alleati → diventano visibili
+                print("[SYNC] 📡 FIRE → Ghost_1, Ghost_2")
+                fire_signal(sync_conns)
+                time.sleep(0.3)  # tempo per ping visibile degli alleati
+
+                # Ri-fetch players per vedere alleati appena diventati visibili
+                try:
+                    r2 = api.players(state.code)
+                    if r2.get("ok"):
+                        players = r2.get("players", players)
+                except:
+                    pass
+
                 targets = state.pick_targets(players)
                 if targets:
                     execute_raffica(api, state, targets, next_ping_at)
@@ -335,11 +345,19 @@ def bot_loop(api, state, sync_conns):
         else:
             print("[Shooter_v1] 👻 Ghost.")
 
+        # ── SLEEP + PREFETCH ──────────────────────────────────────
         if next_ping_at:
             wait = state.seconds_until(next_ping_at) - 0.05
             if wait > 0.5:
-                pd = wait * 0.6
-                threading.Thread(target=lambda d=pd: (time.sleep(d), prefetch_players(api, state)), daemon=True).start()
+                pd2 = wait * 0.7
+                def _pre(d=pd2):
+                    time.sleep(d)
+                    try:
+                        res = api.players(state.code)
+                        players_result[0] = res
+                    except:
+                        pass
+                threading.Thread(target=_pre, daemon=True).start()
                 time.sleep(wait)
             elif wait > 0:
                 time.sleep(wait)
