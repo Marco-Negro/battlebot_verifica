@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 SYNC_PORT   = 9001
 BASE_URL    = "https://sososisi.isonlab.net/api"
 BOT_NAME    = "CheatBot"
-NO_FIRE     = {"Shooter_v1"}   # MAI sparare al principale
+NO_FIRE     = {"Ghost_lastV"}   # MAI sparare al principale
 MAX_THREADS = 50
 
 
@@ -216,16 +216,18 @@ def execute_raffica(api, state, targets, next_ping_at):
 # LOGIN
 # ═══════════════════════════════════════════════════════════════════
 def login(api, state):
-    for attempt in range(1, 4):
+    attempt = 0
+    while True:
+        attempt += 1
         try:
-            print(f"\n[*] Auth {attempt}/3 — '{state.name}'...")
+            print(f"\n[*] Auth #{attempt} — '{state.name}'...")
             res = api.auth(state.name)
             if res.get("ok"):
                 state.reset(res["code"])
-                print(f"[V] {state.name} OK.")
+                print(f"[V] {state.name} OK. Code: {state.code}")
                 next_ping_at = res.get("nextPingAt")
                 ping_every   = res.get("pingEverySeconds", 5)
-                wait = state.seconds_until(next_ping_at) - 0.05 if next_ping_at else ping_every - 0.05
+                wait = state.seconds_until(next_ping_at) - 0.10 if next_ping_at else ping_every - 0.10
                 if wait > 0: time.sleep(wait)
                 return True
             else:
@@ -233,7 +235,6 @@ def login(api, state):
         except Exception as e:
             print(f"[!] Errore: {e}")
         time.sleep(2.0)
-    return False
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -245,9 +246,7 @@ def login(api, state):
 #   /players [~100ms] ──┘ partono insieme → risparmio ~100ms
 # ═══════════════════════════════════════════════════════════════════
 def ally_loop(api, state, sync):
-    if not login(api, state):
-        print("[!!] Auth fallita.")
-        return
+    login(api, state)
 
     while True:
         state.iteration += 1
@@ -283,7 +282,7 @@ def ally_loop(api, state, sync):
             motivo = ping_res.get("error", "?") if ping_res else "no risposta"
             print(f"[!] Ping fallito: {motivo}")
             time.sleep(2.0)
-            if not login(api, state): time.sleep(5.0)
+            login(api, state)
             continue
 
         next_ping_at = ping_res.get("nextPingAt")
@@ -312,7 +311,7 @@ def ally_loop(api, state, sync):
                     print(f"[{BOT_NAME}] Nessun target nemico.")
 
         if next_ping_at:
-            wait = state.seconds_until(next_ping_at) - 0.05
+            wait = state.seconds_until(next_ping_at) - 0.10
             if wait > 0:
                 time.sleep(wait)
         else:

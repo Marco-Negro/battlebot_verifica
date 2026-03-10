@@ -1,3 +1,26 @@
+RIASSUNTO DEFINITIVO :
+
+
+1. Ho lavorato da solo
+2. potevo cambiare strategia, il punto v7 — Kill lock + vendetta tracker (priorità fuoco)
+Kill lock: il bot locka il leader assoluto e non lo molla finché non sparisce o viene superato di +10 punti. Vendetta tracker: hit_by dict che accumula il danno ricevuto per fonte — chi spara di più finisce secondo nella lista fire. 
+
+ERA interessante ma mi ha limitato perchè non l'ho più cambiato.
+
+3. v9 — First blood + burst finale (fasi di round)
+Logica a fasi: primi 30s sempre visibile e aggressivo (first blood), ultimi 60s sempre visibile (burst finale). Anch'essa rimossa nella versione full-attack — il bot è sempre in modalità attacco quindi le fasi erano ridondanti.
+
+HANDICAP. ERRORE GROSSOLANO.
+
+4. 3 programmi ( buona idea ma poco tempo per svilupparla..era cheat )
+
+5. devo aver sviluppato una vers buona circa la versione 7 o 8 o 9 (di preciso non so dirlo perhcè ho avuto poco tempo per provare correttamente i vari implementi del codice con strategie ultime, post mortem )
+
+
+
+
+
+
 
 ## Strategia di gioco — evoluzione versione per versione ( ALCUNE NON SONO DOCUMENTATE IN GIT, A CAUSA DELLA VELOCITà DI EVO )
 
