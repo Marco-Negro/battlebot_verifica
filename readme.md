@@ -1,4 +1,24 @@
-Strategia completa — evoluzione versione per versione ( ALCUNE NON SONO DOCUMENTATE IN GIT, A CAUSA DELLA VELOCITà DI EVO )
+
+## Strategia di gioco — evoluzione versione per versione ( ALCUNE NON SONO DOCUMENTATE IN GIT, A CAUSA DELLA VELOCITà DI EVO )
+
+Bot sviluppato per il gioco competitivo multiplayer su `sososisi.isonlab.net`.
+
+### Architettura
+- `Ghost_lastV.py` — master shooter (Shooter_v1 in game)
+- `cheatBot.py`    — alleato attivo Ghost_1
+- `BOT.py`         — alleato attivo Ghost_2
+
+### Ottimizzazioni implementate
+- Sincronizzazione tri-bot via socket TCP locale
+- /players in parallelo al ping (-100ms per ciclo)
+- 50 thread simultanei per raffica
+- Kill lock, vendetta tracker, DNS pre-resolve
+
+
+------------------------------>          https://github.com/Marco-Negro/battlebot_verifica                     <-----------------------
+
+
+varie versioni dalla partenza: 
 
 v1 — Ping base, timing fisso (rotto)
 Primo tentativo. Sleep fisso di 5s hardcodato. Il server ha timing dinamico → i ping arrivavano fuori finestra → codice distrutto continuamente.
