@@ -1,101 +1,86 @@
 # BATTLEBOT
 # AVEVO UN PROBLEMA CON LA VELOCITà DI SPARO E HO APPORTATO 3 FIX PER LA MODALITà DI SPARO OFFLINE-INVISIBILE
 
+# STO RISCONTRANDO PROBLEMA DI AUTENTICAZIONE [!] Sessione persa. Re-autenticazione...
+'''[*] SESSIONE ATTIVA: xxx_66 | Key: 01PMBJIQ
+[!] Sessione persa. Re-autenticazione...
+[*] SESSIONE ATTIVA: xxx_66 | Key: U75AN3T4
+[!] Sessione persa. Re-autenticazione...
+[*] SESSIONE ATTIVA: xxx_66 | Key: M3HU194J
+[!] Sessione persa. Re-autenticazione...
+[*] SESSIONE ATTIVA: xxx_66 | Key: CPHV21CC
+[!] Sessione persa. Re-autenticazione...
+'''
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-class PredatorSniperUltra:
-    def __init__(self, name):
+class BattleBotFinal:
+    def __init__(self, base_name):
         self.base_url = "https://sososisi.isonlab.net/api"
-        self.name = name
+        # Cambiamo nome a ogni avvio per resettare sessioni bloccate
+        self.name = f"{base_name}_{int(time.time() % 100)}"
         self.code = None
-        # POWER UP 1: Gatling Gun (30 thread per colpi simultanei istantanei)
-        self.executor = ThreadPoolExecutor(max_workers=30) 
-        self.safety_margin = 5.1  # POWER UP 2: Il "muro" di sicurezza contro i ban (5.1s)
+        self.executor = ThreadPoolExecutor(max_workers=5)
+        self.safety_interval = 5.2 # Intervallo di sicurezza per non essere bannati
 
     def login(self):
-        """Autenticazione con gestione errori"""
         try:
             res = requests.get(f"{self.base_url}/auth", params={"name": self.name}, timeout=5).json()
             if res.get("ok"):
                 self.code = res["code"]
-                print(f"[*] LOGIN SUCCESS: Key [{self.code}] ottenuta per {self.name}")
+                print(f"[*] SESSIONE ATTIVA: {self.name} | Key: {self.code}")
                 return True
-        except Exception as e:
-            print(f"[!] Errore Auth: {e}")
-        return False
+        except: return False
 
-    def send_fire(self, target):
-        """Invia il colpo al server"""
+    def fire_task(self, target):
+        """Invia un singolo colpo"""
         try:
-            # Timeout breve per non bloccare i thread
-            requests.get(f"{self.base_url}/fire", params={"code": self.code, "target": target}, timeout=2)
-        except:
-            pass
+            requests.get(f"{self.base_url}/fire", params={"code": self.code, "target": target}, timeout=1)
+        except: pass
 
     def run(self):
-        if not self.login():
-            return
-
-        print("[*] Bot avviato. Caccia ai leader in corso...")
+        if not self.login(): return
 
         while True:
-            start_cycle = time.time()  # Punto di riferimento per il timer di precisione
+            start_time = time.time()
 
             try:
-                # 1. PING (Forziamo 'visible' per poter sparare)
-                ping_params = {"code": self.code, "visible": "visible"}
-                res_ping = requests.get(f"{self.base_url}/ping", params=ping_params, timeout=3).json()
+                # 1. IL PING (Deve essere pulito e veloce)
+                ping_res = requests.get(f"{self.base_url}/ping", 
+                                      params={"code": self.code, "visible": "visible"}, timeout=2).json()
                 
-                if not res_ping.get("ok"):
-                    print("[!] Sessione scaduta o eliminata. Tentativo di rientro...")
+                if not ping_res.get("ok"):
+                    print("[!] Sessione persa. Re-autenticazione...")
                     if self.login(): continue
-                    else: 
-                        time.sleep(2)
-                        continue
+                    else: break
 
-                # 2. POWER UP 3: Scansione e Priorità (Caccia ai Pesci Grossi)
-                res_players = requests.get(f"{self.base_url}/players", params={"code": self.code}, timeout=3).json()
+                # 2. SCANSIONE BERSAGLI
+                p_res = requests.get(f"{self.base_url}/players", params={"code": self.code}, timeout=2).json()
                 
-                if res_players.get("ok"):
-                    players = res_players.get("players", [])
-                    
-                    # Filtra: visibili e non io
-                    targets = [p for p in players if p['name'] != self.name and p.get('visible')]
-                    
-                    # Ordina per punteggio (score) decrescente per colpire prima i leader
+                if p_res.get("ok"):
+                    # Filtra nemici visibili e ordinali per punteggio
+                    targets = [p for p in p_res.get("players", []) if p['name'] != self.name and p.get('visible')]
                     targets.sort(key=lambda x: x.get('score', 0), reverse=True)
-                    
-                    if targets:
-                        print(f"[VOLLEY] Bersagli: {len(targets)} | Primo Target: {targets[0]['name']} ({targets[0].get('score')} pt)")
-                        for t in targets:
-                            # Spara a tutti simultaneamente usando i thread
-                            self.executor.submit(self.send_fire, t['name'])
-                    else:
-                        print("[IDLE] Nessun bersaglio visibile.")
+
+                    # 3. IL TRICK: SPARO DILAZIONATO
+                    # Spariamo ai primi 10, ma uno ogni 0.2 secondi
+                    # Questo mantiene la connessione fluida e non rompe l'audio del prof
+                    for i, target in enumerate(targets[:10]):
+                        self.executor.submit(self.fire_task, target['name'])
+                        time.sleep(0.2) # Distribuisce i colpi nel tempo
+                        print(f"[FIRE] Lanciato colpo {i+1}/10 a {target['name']}")
 
             except Exception as e:
-                print(f"[ERRORE] Ciclo interrotto: {e}")
+                print(f"[!] Errore: {e}")
 
-            # --- CALCOLO PRECISIONE (FIX 5.1s) ---
-            # Misuriamo quanto tempo ha impiegato il codice (ping + scansione + invio thread)
-            elapsed = time.time() - start_cycle
-            
-            # Calcoliamo l'attesa per arrivare esattamente a 5.1 secondi
-            # Usiamo 5.1 per essere sicuri che il server non ci veda come "troppo veloci"
-            wait_time = self.safety_margin - elapsed
-            
-            if wait_time > 0:
-                # Se siamo stati veloci (es. 0.5s), aspettiamo 4.6s
-                time.sleep(wait_time)
-            else:
-                # Se abbiamo laggato e ci abbiamo messo più di 5.1s, non aspettiamo
-                print(f"[WARN] Lag di rete rilevato: ciclo durato {elapsed:.2f}s")
+            # 4. SINCRONIZZAZIONE FINALE
+            # Calcoliamo quanto tempo dormire per arrivare a 5.2s totali
+            elapsed = time.time() - start_time
+            to_sleep = max(0.1, self.safety_interval - elapsed)
+            time.sleep(to_sleep)
 
 if __name__ == "__main__":
-    # INSERISCI IL TUO NOME QUI
-    MY_NICKNAME = "xxx" 
-    bot = PredatorSniperUltra(MY_NICKNAME)
+    # Inserisci il tuo nome qui (il codice aggiungerà un numero finale)
+    bot = BattleBotFinal("xxx") 
     bot.run()
-
