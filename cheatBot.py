@@ -271,5 +271,5 @@ def run(api, state):
 
 if __name__ == "__main__":
     api   = BattleAPI("https://sososisi.isonlab.net/api")
-    state = BotState("Ghost_v7")
+    state = BotState("Ghost_1")
     run(api, state)

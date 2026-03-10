@@ -414,5 +414,5 @@ def run(api, state):
 
 if __name__ == "__main__":
     api   = BattleAPI("https://sososisi.isonlab.net/api")
-    state = BotState("Ghost_XxX")
+    state = BotState("Ghost_2")
     run(api, state)

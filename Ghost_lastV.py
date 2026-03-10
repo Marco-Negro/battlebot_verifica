@@ -256,8 +256,8 @@ def execute_raffica(api, state, targets, next_ping_at):
 
 # ═══════════════════════════════════════════════════════════════════
 # CHEAT IBRIDO: DUE ISTANZE IN PARALLELO
-# Bot A (Ghost_V4)  → kill lock sul leader
-# Bot B (Ghost_V4b) → kill lock sul secondo + vendetta
+# Bot A (Shooter_v1)  → kill lock sul leader
+# Bot B (Shooter_v1b) → kill lock sul secondo + vendetta
 # Girano in thread separati, condividono zero stato.
 # Il server li vede come due giocatori distinti.
 # ═══════════════════════════════════════════════════════════════════
@@ -369,25 +369,25 @@ if __name__ == "__main__":
 
     # ── Bot A: kill lock aggressivo sul leader ────────────────────
     api_a   = BattleAPI(BASE_URL, HOSTNAME)
-    state_a = BotState("Ghost_V4")
+    state_a = BotState("Shooter_v1")
 
     # ── Bot B: stesso codice, nome diverso ────────────────────────
     # Il server lo vede come giocatore separato.
     # Attacca gli stessi target da un secondo vettore.
     api_b   = BattleAPI(BASE_URL, HOSTNAME)
-    state_b = BotState("Ghost_V4b")
+    state_b = BotState("Shooter_v1b")
 
     thread_a = threading.Thread(target=bot_loop, args=(api_a, state_a), daemon=False)
     thread_b = threading.Thread(target=bot_loop, args=(api_b, state_b), daemon=False)
 
-    print("[ DUAL BOT ] Lancio Ghost_V4 + Ghost_V4b...")
+    print("[ DUAL BOT ] Lancio Shooter_v1 + Shooter_v1b...")
     thread_a.start()
 
     # ── Offset di 2.5s tra i due bot ─────────────────────────────
     # Evita che i due bot mandino ping nello stesso istante
     # e che le loro raffiche si sovrappongano sul server.
     # Con offset 2.5s uno spara mentre l'altro dorme → copertura continua.
-    time.sleep(2.5)
+    time.sleep(2.5) 
     thread_b.start()
 
     thread_a.join()
