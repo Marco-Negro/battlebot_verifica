@@ -27,7 +27,7 @@ from collections import defaultdict
 
 BASE_URL    = "https://sososisi.isonlab.net/api"
 HOSTNAME    = "sososisi.isonlab.net"
-BOT_NAME    = "Shooter_v1"
+BOT_NAME    = "ADAPTIVE - BOT "                      # <---- LO RINOMINO QUI
 MAX_THREADS = 50
 
 
