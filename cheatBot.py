@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 # ═══════════════════════════════════════════════════════════════════
 SYNC_PORT   = 9001
 BASE_URL    = "https://sososisi.isonlab.net/api"
-BOT_NAME    = "Ghost_1"
+BOT_NAME    = "CheatBot"
 NO_FIRE     = {"Shooter_v1"}   # MAI sparare al principale
 MAX_THREADS = 50
 
